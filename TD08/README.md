@@ -12,7 +12,9 @@ Le programme doit proposer trois fonctionnalités :
 
 Après F0, le programme demande à l’utilisateur de choisir `1` pour F1 ou `2` pour F2.
 
-La réalisation est écrite en assembleur NASM x86-64 pour Linux, avec les structures, registres, boucles, fonctions, opérations sur la pile et syscalls travaillés dans les cours.
+La réalisation est écrite en assembleur NASM x86-64 pour Linux, avec les structures, registres, boucles, fonctions, opérations sur la pile et syscalls travaillés dans les cours. Le programme est prévu pour être exécuté avec Qiling (section 12).
+
+Les exercices préparatoires du TD (`exo1_people_note.asm`, `exo2_crack_me.asm`) ne font pas partie de ce rendu.
 
 ## 2. Déroulement général
 
@@ -57,7 +59,7 @@ Le programme affiche :
 Entrez le mot de passe de la base :
 ```
 
-La saisie est stockée dans `db_password` avec la fonction `read_string`.
+F0 est réalisée par la fonction `f0_open_vault` (`inc/f0_open.inc`). La saisie est stockée dans `db_password` avec la fonction `read_string`.
 
 La clé est ensuite préparée :
 
@@ -75,7 +77,7 @@ Mot de passe saisi : a b c d e f g h i j
 Clé utilisée      : a b c d e f g h
 ```
 
-Le programme ouvre ensuite le fichier nommé `vault.db` avec `open_file` :
+Le programme ouvre ensuite le fichier nommé `vault.db` avec `open_file` (`inc/cours.inc`) :
 
 - S’il n’existe pas, il est créé vide.
 - S’il existe, son contenu est conservé.
@@ -111,17 +113,26 @@ Le programme affiche :
 Votre choix :
 ```
 
-La réponse est lue avec `read_string`, puis comparée aux caractères `1` et `2` :
+La réponse est lue avec `read_string`, puis comparée aux caractères `1` et `2`. Selon le choix, `_start` appelle la fonction correspondante :
 
 ```nasm
-cmp byte [menu_choice], '1'
-je F1
+    cmp byte [menu_choice], '1'
+    je .choice_f1
+    cmp byte [menu_choice], '2'
+    je .choice_f2
+    jmp exit_program
 
-cmp byte [menu_choice], '2'
-je F2
+.choice_f1:
+    call f1_add_credential
+    jmp .check_result
+.choice_f2:
+    call f2_show_vault
+.check_result:
+    cmp rax, 0
+    jl file_error
 ```
 
-`cmp` compare les valeurs. `je` effectue le saut si elles sont égales.
+`cmp` compare les valeurs, `je` saute si elles sont égales. F1 et F2 sont des fonctions : `call` y entre, leur `ret` revient dans `_start`, qui examine ensuite la valeur de retour (`rax < 0` : erreur, sortie avec le code 1).
 
 Dans notre version, un choix différent ou une réponse dont la longueur stockée n’est pas un caractère provoque la fin du programme.
 
@@ -209,13 +220,28 @@ Résultat 0110              Résultat  0101
 
 ### Dans notre code
 
+Le chiffrement est réalisé par la fonction `xor_ecb(buff, size, key)` de la bibliothèque `inc/cours.inc`. Le même appel sert à chiffrer et à déchiffrer, puisque `(A XOR K) XOR K = A` :
+
 ```nasm
-xor qword [db_buffer + rbx], rax
-add rbx, 8
+    mov rdi, db_buffer      ; adresse du tampon
+    mov rsi, [db_size]      ; taille : valeur de db_size
+    mov rdx, [db_key]       ; clé : valeur de db_key
+    call xor_ecb
 ```
 
-- `rax` contient la clé.
-- `rbx` indique la position dans le tampon.
+Dans la fonction :
+
+```nasm
+.next_block:
+    cmp rcx, rsi
+    jae .end
+    xor qword [rdi + rcx], rdx
+    add rcx, 8
+    jmp .next_block
+```
+
+- `rdx` contient la clé.
+- `rcx` indique la position dans le tampon.
 - `qword` désigne un bloc de huit octets.
 - Après chaque opération, on avance de huit octets.
 
@@ -243,6 +269,8 @@ Rechiffrer la base complète
 Sauvegarder dans le fichier
 ```
 
+F1 est réalisée par la fonction `f1_add_credential` (`inc/f1_add.inc`).
+
 ### Étape 1 : demander le login et le password
 
 Le programme affiche successivement :
@@ -258,7 +286,7 @@ Le mot de passe saisi à cette étape est celui de l’identifiant à conserver.
 
 ### Étape 2 : charger le fichier en mémoire
 
-Le fichier est ouvert, puis lu avec `read_file` dans `db_buffer`. Le nombre d’octets chargés est conservé dans `db_size`.
+La fonction `load_db` (`inc/db.inc`) ouvre le fichier, le lit dans `db_buffer` avec `read_all`, puis le ferme. Le nombre d’octets chargés est conservé dans `db_size`.
 
 ```text
 Disque                           Mémoire
@@ -267,17 +295,17 @@ vault.db ---- lecture ---->      db_buffer
 
 `db_buffer` est un tampon : une zone temporaire dans laquelle le programme peut modifier les données avant de les sauvegarder.
 
-La lecture continue jusqu’à la fin du fichier ou jusqu’à la capacité du tampon, puis le fichier est fermé.
+`read_all` appelle `read_file` jusqu’à la fin du fichier ou jusqu’à la capacité du tampon.
 
 ### Étape 3 : vérifier le format et la place disponible
 
-Chaque entrée fait 64 octets. Le programme vérifie donc que la taille chargée est un multiple de 64.
+Chaque entrée fait 64 octets. `load_db` vérifie donc que la taille chargée est un multiple de 64, et refuse un fichier plus grand que le tampon.
 
 Il vérifie aussi qu’il reste au moins 64 octets pour ajouter la nouvelle entrée. En cas de refus, le fichier n’est pas réécrit.
 
 ### Étape 4 : déchiffrer la base
 
-La boucle XOR déchiffre les blocs déjà présents dans `db_buffer`.
+`xor_ecb` déchiffre les blocs déjà présents dans `db_buffer`.
 
 Si le fichier est vide, `db_size` vaut zéro : aucun ancien bloc n’est à déchiffrer.
 
@@ -305,15 +333,13 @@ add qword [db_size], credential_size
 
 ### Étape 6 : rechiffrer tout le contenu
 
-Le programme recharge la clé et applique le XOR sur la totalité des données : anciennes entrées et nouvelle entrée.
-
-La clé est rechargée parce que la copie utilise `al`, qui est une partie de `rax`.
+`xor_ecb` est appelée une seconde fois, sur la totalité des données : anciennes entrées et nouvelle entrée.
 
 ### Étape 7 : écrire dans le fichier
 
-La base est rouverte pour repartir du début du fichier. `write_file` écrit les `db_size` octets chiffrés.
+La fonction `save_db` (`inc/db.inc`) rouvre la base pour repartir du début du fichier, puis `write_all` écrit les `db_size` octets chiffrés. Si une écriture ne transfère qu’une partie des données, `write_all` continue avec les octets restants.
 
-La variable `db_written` permet de suivre l’avancement : si une écriture ne transfère qu’une partie des données, la boucle continue avec les octets restants.
+Le fichier n’est pas vidé avant l’écriture : la nouvelle base est toujours plus grande que l’ancienne (une entrée de plus), elle la recouvre donc entièrement.
 
 Après fermeture du fichier, le programme affiche :
 
@@ -329,10 +355,14 @@ F2 doit déchiffrer le contenu du fichier et l’afficher.
 
 ### Ce que nous avons réalisé
 
+F2 est réalisée par la fonction `f2_show_vault` (`inc/f2_show.inc`) :
+
 1. Ouvrir `vault.db`.
 2. Lire ses octets dans `db_buffer` et conserver leur nombre dans `db_size`.
 3. Fermer le fichier.
 4. Vérifier que sa taille correspond à des entrées complètes.
+
+   Les étapes 1 à 4 sont celles de `load_db`, partagée avec F1.
 5. Déchiffrer le tampon avec la clé préparée dans F0.
 6. Afficher le login et le password de chaque entrée.
 7. Quitter après la dernière entrée.
@@ -349,7 +379,7 @@ Pour chaque entrée :
 
 - Le login commence à sa position de départ.
 - Le password commence 32 octets plus loin.
-- Chaque champ est affiché jusqu’au zéro final, sans dépasser ses 32 octets.
+- Chaque champ est affiché jusqu’à son zéro final, dont la position est donnée par `strlen` (voir la faille décrite en section 11).
 
 Exemple :
 
@@ -434,17 +464,52 @@ Les entrées sont placées les unes à la suite des autres, sans en-tête ni sé
 | 2 | 128 octets |
 | 64 | 4096 octets |
 
-Notre tampon fixe contient 4096 octets, soit 64 entrées maximum. F1 refuse un ajout si la place manque. F2 refuse un fichier dépassant cette capacité, en vérifiant s’il reste un octet à lire après le remplissage du tampon.
+Notre tampon fixe contient 4096 octets (`DB_CAPACITY`), soit 64 entrées maximum. F1 refuse un ajout si la place manque. `load_db` refuse un fichier dépassant cette capacité, en vérifiant s’il reste un octet à lire après le remplissage du tampon.
 
 La taille du tampon et la réservation d’un zéro final dans chaque champ sont des choix de réalisation ; l’énoncé impose les champs de 32 octets, mais ne fixe pas ces détails.
 
-Le programme n’a pas de mécanisme de vérification du mot de passe de la base. Une mauvaise clé peut produire un affichage incorrect et ne doit pas être utilisée pour ajouter une entrée à une base existante. Le contrôle de taille ne permet pas de détecter une mauvaise clé.
-
-**Faille connue — longueur des champs dans F2.** F2 calcule la longueur du login et du password avec `strlen`, qui s’arrête au premier octet nul. Avec une saisie normale, ce zéro est toujours présent : `read_string` le réserve, un champ contient donc au plus 31 caractères suivis de 0. En revanche, après un déchiffrement avec une mauvaise clé (ou un fichier modifié à la main), un champ peut ne plus contenir de zéro : `strlen` continue alors dans le champ suivant, et l’affichage mélange les champs (le login peut s’afficher collé au password). Une version bornée (`strnlen`, arrêt à 32 octets) corrigerait ce cas ; nous avons choisi de ne pas l’ajouter pour garder le code simple, l’énoncé ne demandant pas de gérer une mauvaise clé.
-
 Les saisies restent visibles dans le terminal. Il n’y a pas de suppression d’entrée, de recherche, de modification d’identifiant ni de détection des doublons : ces fonctionnalités ne sont pas demandées dans l’énoncé.
 
-## 11. Compilation et exemple complet
+## 11. Analyse de sécurité
+
+Le chiffrement XOR ECB avec une clé de 8 octets est imposé par le sujet. Il est réalisé conformément à l’énoncé, mais il présente des faiblesses qu’une simple analyse du fichier permet d’exploiter.
+
+### La clé apparaît en clair dans le fichier
+
+Un champ fait 32 octets. Le login `alice` n’en occupe que 5 : les 27 autres valent 0. Or `0 XOR K = K` : un bloc de 8 octets nuls, une fois chiffré, contient exactement la clé.
+
+```text
+  0000 0000   octet nul du champ
+⊕ 0110 0001   'a', premier octet de la clé
+= 0110 0001   'a' : la clé ressort telle quelle
+```
+
+Comme ECB applique la même clé à chaque bloc, la clé se répète partout où les champs sont incomplets. Exemple avec la clé `abcdefgh` (`od -A d -t x1 vault.db`) :
+
+```text
+0000000 00 0e 0a 07 00 66 67 68 61 62 63 64 65 66 67 68
+0000016 61 62 63 64 65 66 67 68 61 62 63 64 65 66 67 68
+```
+
+`61 62 63 64 65 66 67 68` est le code ASCII de `abcdefgh`. Il suffit d’ouvrir le fichier pour lire la clé et déchiffrer toute la base, sans connaître le mot de passe.
+
+### Mot de passe vide ou court
+
+La clé est formée des 8 premiers octets du mot de passe. Avec un mot de passe de moins de 8 caractères, les octets manquants de la clé valent 0 ; avec un mot de passe vide, la clé entière vaut 0. Comme `X XOR 0 = X`, les octets correspondants ne sont pas chiffrés : avec un mot de passe vide, les identifiants sont écrits en clair dans `vault.db`.
+
+### Blocs identiques
+
+En ECB, deux blocs clairs identiques donnent deux blocs chiffrés identiques. Deux entrées ayant le même password, ou le même début de login, sont donc reconnaissables dans le fichier sans le déchiffrer.
+
+### Pas de vérification du mot de passe
+
+Le programme ne vérifie pas que le mot de passe de la base est le bon. Avec une mauvaise clé, F2 affiche des données incorrectes. F1 avec une mauvaise clé ne détruit pas les entrées existantes (elles sont « déchiffrées » puis rechiffrées avec la même mauvaise clé, donc inchangées), mais la nouvelle entrée est chiffrée avec une clé différente : la base mélange alors deux clés. Le contrôle de taille ne permet pas de détecter une mauvaise clé.
+
+### Longueur des champs dans F2
+
+F2 calcule la longueur du login et du password avec `strlen`, qui s’arrête au premier octet nul. Avec une saisie normale, ce zéro est toujours présent : `read_string` le réserve, un champ contient donc au plus 31 caractères suivis de 0. En revanche, après un déchiffrement avec une mauvaise clé (ou un fichier modifié à la main), un champ peut ne plus contenir de zéro : `strlen` continue alors dans le champ suivant, et l’affichage mélange les champs (le login peut s’afficher collé au password). Une version bornée (`strnlen`, arrêt à 32 octets) corrigerait ce cas ; nous avons choisi de ne pas l’ajouter pour garder le code simple, l’énoncé ne demandant pas de gérer une mauvaise clé.
+
+## 12. Compilation et exemple complet
 
 ### Environnement Docker
 
@@ -485,6 +550,10 @@ L’exécutable fonctionne aussi sans émulation (`./rootfs/secure_vault`) ; la 
 
 ### Premier lancement : ajouter une entrée
 
+```bash
+./qiling_run.py rootfs/secure_vault
+```
+
 ```text
 Entrez le mot de passe de la base : abcdefgh
 1 : Ajouter des identifiants
@@ -497,7 +566,7 @@ Identifiants enregistres.
 
 ### Lancement suivant : afficher la base
 
-Relancer `./secure_vault`, utiliser le même mot de passe de base et choisir `2` :
+Relancer `./qiling_run.py rootfs/secure_vault`, utiliser le même mot de passe de base et choisir `2` :
 
 ```text
 Entrez le mot de passe de la base : abcdefgh
@@ -510,29 +579,35 @@ Password : exemple123
 
 Si d’autres entrées existent déjà, elles sont également affichées.
 
-## 12. Vérifications réalisées
+## 13. Vérifications réalisées
 
-Les essais manuels effectués pendant la réalisation ont permis d’observer :
+Les essais suivants ont été effectués dans le conteneur Docker du projet, sous Qiling et en exécution directe :
 
 | Vérification | Résultat observé |
 |---|---|
 | Demande du mot de passe | Le programme attend la saisie et la touche Entrée. |
-| Création d’une base absente | Création d’un fichier vide de 0 octet. |
-| Ajout d’identifiants | Affichage du message de confirmation. |
+| Création d’une base absente | Création d’un fichier vide de 0 octet (`rootfs/vault.db` sous Qiling). |
+| Ajout d’identifiants (F1) | Affichage du message de confirmation. |
 | Taille après deux entrées | Fichier de 128 octets. |
-| Affichage par F2 | Affichage de deux couples, dont le couple connu `line` / `nerista` retrouvé après déchiffrement. |
+| Affichage par F2 | Les deux couples saisis sont affichés en clair, par exemple `alice` / `exemple123` et `bob` / `secret456`. |
+| F2 sur une base vide | Aucun affichage, fin normale. |
+| Login de plus de 31 caractères | Le login est tronqué à 31 caractères, le password reste correct. |
+| Base pleine (64 entrées) puis F1 | Ajout refusé avec un message, fichier inchangé, code de sortie 1. |
+| Fichier de plus de 4096 octets | Refusé avec un message, code de sortie 1. |
+| Taille non multiple de 64 | Refusée avec un message, code de sortie 1. |
+| Choix invalide au menu | Fin du programme sans action. |
 
-Le parcours principal F0 → F1, puis F0 → F2, a donc été exercé dans le conteneur du cours. Ces essais ne constituent pas une validation automatique de tous les cas limites ou de toutes les erreurs système.
+Ces essais ne constituent pas une validation automatique de tous les cas limites ou de toutes les erreurs système.
 
 Pour vérifier la taille du fichier :
 
 ```bash
-ls -l vault.db
+ls -l rootfs/vault.db
 ```
 
 `cat vault.db` ne déchiffre pas les données. L’affichage en clair se fait avec F2.
 
-## 13. Correspondance avec les consignes
+## 14. Correspondance avec les consignes
 
 | Consigne de l’énoncé | Réalisation |
 |---|---|
@@ -543,18 +618,21 @@ ls -l vault.db
 | Proposer le choix 1 ou 2 | Menu et branchements vers F1 ou F2. |
 | Saisir les identifiants | Questions login et password dans F1. |
 | Structure de 32 octets par champ | Structure `credential` de 64 octets. |
-| Déchiffrer, ajouter, rechiffrer | Boucles de F1 dans cet ordre. |
-| Sauvegarder le fichier | Écriture complète du tampon utile avec `write_file`. |
-| Déchiffrer et afficher le contenu | Lecture, XOR et affichage des champs dans F2. |
+| Déchiffrer, ajouter, rechiffrer | `f1_add_credential` : `xor_ecb`, copie de l’entrée, `xor_ecb`, dans cet ordre. |
+| Sauvegarder le fichier | `save_db` : écriture complète du tampon utile avec `write_all`. |
+| Déchiffrer et afficher le contenu | `f2_show_vault` : `load_db`, `xor_ecb` et affichage des champs. |
+| Étendre `inc/cours.inc` (fichiers, XOR) | `open_file`, `read_file`, `write_file`, `close_file`, `read_all`, `write_all`, `xor_ecb`. |
+| Code structuré en fonctions, usage de la pile | Une fonction par fonctionnalité, prologue / épilogue, registres sauvegardés (section 9). |
 
-## 14. Utilisation de l’IA
+## 15. Utilisation de l’IA
 
 Un assistant IA a été utilisé pendant la réalisation de ce projet pour :
 
 - Expliquer les notions du cours : registres, adresses, mémoire, structures, pile, syscalls et chiffrement XOR.
 - Décomposer le sujet en étapes et expliquer le fonctionnement des instructions et des fonctions.
 - Proposer et écrire progressivement le code en s’appuyant sur les supports du cours.
+- Restructurer le code en fonctions réutilisables et en fichiers, et préparer l’environnement Docker et Qiling.
 - Aider à interpréter les résultats des essais et les messages du terminal.
 - Rédiger et organiser cette documentation.
 
-Le code produit avec cette aide ne constitue pas un corrigé officiel du professeur. Les essais manuels rapportés dans ce README ont été effectués par l’étudiant dans le conteneur du cours.
+Le code produit avec cette aide ne constitue pas un corrigé officiel du professeur. Les notions utilisées restent celles du cours (NASM, structures, pile, syscalls, `%include`).
