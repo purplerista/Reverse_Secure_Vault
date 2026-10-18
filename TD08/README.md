@@ -402,19 +402,42 @@ Les saisies restent visibles dans le terminal. Il n’y a pas de suppression d�
 
 ## 11. Compilation et exemple complet
 
-Depuis le répertoire contenant le source :
+### Environnement Docker
+
+Le dossier `docker/` reprend le docker du cours (Ubuntu 24.04, `nasm`, `ld`, Qiling 1.4.11), sans Ghidra. Le dossier `TD08` est partagé avec le conteneur dans `/opt/secure_vault`.
+
+```bash
+cd docker
+docker compose up -d --build        # première fois : construction de l'image
+docker exec -it secure_vault bash   # shell dans le conteneur, dans /opt/secure_vault
+```
+
+### Compilation
+
+Dans le conteneur :
 
 ```bash
 ./build_nasm.sh secure_vault.asm
-./secure_vault
 ```
 
-Les commandes d’assemblage et d’édition de liens correspondantes sont :
+L’exécutable est déposé dans `rootfs/secure_vault`. Les commandes correspondantes sont :
 
 ```bash
-nasm -f elf64 secure_vault.asm -o secure_vault.o
-ld secure_vault.o -o secure_vault
+nasm -f elf64 secure_vault.asm -o rootfs/obj/secure_vault.o
+ld rootfs/obj/secure_vault.o -o rootfs/secure_vault
 ```
+
+### Exécution avec Qiling
+
+```bash
+./qiling_run.py rootfs/secure_vault
+# ou
+./ql_run.sh rootfs/secure_vault
+```
+
+Qiling émule le programme avec `rootfs/` comme système de fichiers : la base est donc créée dans `rootfs/vault.db`.
+
+L’exécutable fonctionne aussi sans émulation (`./rootfs/secure_vault`) ; la base est alors `vault.db` dans le répertoire courant, distincte de celle de Qiling.
 
 ### Premier lancement : ajouter une entrée
 

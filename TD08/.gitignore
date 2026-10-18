@@ -1,0 +1,5 @@
+# Produits de compilation et base de test
+rootfs/obj/
+rootfs/secure_vault
+vault.db
+rootfs/vault.db

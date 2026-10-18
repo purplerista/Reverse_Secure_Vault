@@ -1,0 +1,12 @@
+services:
+  secure_vault:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: secure_vault:latest
+    container_name: secure_vault
+    command: tail -F /dev/null
+    working_dir: /opt/secure_vault
+    volumes:
+      # Le dossier TD08 est partage avec le conteneur
+      - ../:/opt/secure_vault
