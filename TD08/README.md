@@ -362,24 +362,67 @@ Password : exemple456
 
 F2 ne réécrit pas le fichier. Seule la copie en mémoire est déchiffrée ; les octets sauvegardés sur le disque restent chiffrés.
 
-## 9. Fonctions qui permettent de réaliser le sujet
+## 9. Organisation du code et fonctions
 
-| Fonction | Utilité dans le programme |
-|---|---|
-| `print_string` | Afficher les questions, le menu, les messages et les identifiants. |
-| `read_string` | Recevoir le mot de passe de base, le choix et les deux champs des identifiants. |
-| `open_file` | Ouvrir ou créer la base. |
-| `read_file` | Copier les octets du fichier dans le tampon. |
-| `write_file` | Sauvegarder les octets chiffrés. |
-| `close_file` | Fermer le fichier après utilisation. |
+### Fichiers
 
-Ces fonctions se trouvent dans la bibliothèque `inc/cours.inc`, incluse par `secure_vault.asm` avec `%include "./inc/cours.inc"`. `print_hex` et `print_string` reprennent le code fourni ; les autres sont adaptées ou implémentées à partir des exemples et des signatures prévues dans les supports du cours.
+```text
+TD08/
+├── secure_vault.asm     programme principal : _start, menu, données
+├── inc/
+│   └── cours.inc        bibliothèque générique, réutilisable
+├── vault/               fonctions propres au Secure Vault
+│   ├── db.inc           load_db, save_db
+│   ├── f0_open.inc      f0_open_vault
+│   ├── f1_add.inc       f1_add_credential
+│   └── f2_show.inc      f2_show_vault
+├── build_nasm.sh        compilation vers rootfs/
+├── qiling_run.py        exécution sous Qiling
+├── ql_run.sh            exécution sous Qiling (qltool)
+└── docker/              environnement Docker
+```
 
-La bibliothèque contient aussi `strlen`, `strcmp` et `read_hex`, qui ne servent pas au Secure Vault mais complètent les signatures prévues dans le squelette de `cours.inc`, pour qu’elle puisse être réutilisée dans d’autres programmes.
+Les fichiers `.inc` sont recopiés par NASM dans `secure_vault.asm` grâce à `%include`, dans la section `.text`. Un seul fichier est donc assemblé et lié : `build_nasm.sh` ne change pas.
 
-Les arguments sont transmis par registres. Pour lire ou écrire un fichier, `rdi` contient le descripteur, `rsi` l’adresse du tampon et `rdx` le nombre d’octets demandé. Le résultat revient dans `rax`.
+### Bibliothèque générique : `inc/cours.inc`
 
-Les fonctions utilisent les mécanismes de pile vus en cours : sauvegarde avec `push`, restauration avec `pop`, cadre local avec `rbp` et retour par `ret`. La fonction `read_string` réserve ses variables locales avec `enter 32, 0` et les libère avec `leave`.
+| Fonction | Arguments | Retour (`rax`) |
+|---|---|---|
+| `print_hex` | `rdi` = valeur | – |
+| `print_string` | `rdi` = texte, `rsi` = taille | – |
+| `strlen` | `rdi` = chaîne terminée par 0 | longueur |
+| `strcmp` | `rdi`, `rsi` = chaînes | 0 si égales |
+| `read_string` | `rdi` = tampon, `rsi` = capacité | caractères stockés |
+| `read_hex` | – | valeur lue |
+| `xor_ecb` | `rdi` = tampon, `rsi` = taille, `rdx` = clé | – |
+| `open_file` | `rdi` = nom | descripteur, ou < 0 |
+| `read_file` | `rdi` = fd, `rsi` = tampon, `rdx` = taille max | octets lus, ou < 0 |
+| `write_file` | `rdi` = fd, `rsi` = données, `rdx` = taille | octets écrits, ou < 0 |
+| `read_all` | `rdi` = fd, `rsi` = tampon, `rdx` = capacité | total lu, ou < 0 |
+| `write_all` | `rdi` = fd, `rsi` = données, `rdx` = taille | taille, ou < 0 |
+| `close_file` | `rdi` = fd | 0, ou < 0 |
+
+`print_hex` et `print_string` reprennent le code fourni ; les autres complètent les signatures prévues dans le squelette de `cours.inc`. `strcmp` et `read_hex` ne servent pas au Secure Vault mais rendent la bibliothèque utilisable par d’autres programmes.
+
+### Fonctions du Secure Vault : `vault/`
+
+| Fonction | Rôle | Retour (`rax`) |
+|---|---|---|
+| `f0_open_vault` | F0 : mot de passe → clé, création de `vault.db` | 0, ou < 0 |
+| `f1_add_credential` | F1 : saisie, déchiffrement, ajout, rechiffrement, sauvegarde | 0, ou < 0 |
+| `f2_show_vault` | F2 : chargement, déchiffrement, affichage | 0, ou < 0 |
+| `load_db` | ouvrir, lire avec `read_all`, fermer, vérifier la taille | taille, ou < 0 |
+| `save_db` | ouvrir, écrire avec `write_all`, fermer | 0, ou < 0 |
+
+`_start` appelle `f0_open_vault`, puis `f1_add_credential` ou `f2_show_vault` selon le menu. Les fonctions ne quittent jamais le programme elles-mêmes : elles renvoient une valeur négative en cas d’erreur, et `_start` termine alors avec le code de sortie 1.
+
+### Convention d’appel et pile
+
+- Arguments dans `rdi`, `rsi`, `rdx` ; résultat dans `rax` (convention System V x86-64).
+- Chaque fonction commence par un prologue (`push rbp` / `mov rbp, rsp`, ou `enter`) et se termine par `leave` / `ret`.
+- Les registres *callee-saved* utilisés (`rbx`, `r12` à `r14`) sont sauvegardés par `push` au début et restaurés par `pop`, dans l’ordre inverse, avant `leave` : c’est le cas de `read_all`, `write_all` et `f2_show_vault`, qui ont besoin de valeurs conservées à travers des appels.
+- Les fonctions qui n’appellent personne (`xor_ecb`, la copie de F1) utilisent des registres *caller-saved* (`rcx`) et n’ont rien à sauvegarder.
+- `read_string` et `read_hex` réservent des variables locales sur la pile avec `enter 32, 0`.
 
 ## 10. Taille du fichier et limites de notre réalisation
 
