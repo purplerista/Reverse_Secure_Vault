@@ -373,7 +373,9 @@ F2 ne réécrit pas le fichier. Seule la copie en mémoire est déchiffrée ; le
 | `write_file` | Sauvegarder les octets chiffrés. |
 | `close_file` | Fermer le fichier après utilisation. |
 
-Ces fonctions se trouvent dans le source principal de notre version. `print_string` reprend le code fourni ; les autres sont adaptées ou implémentées à partir des exemples et des signatures prévues dans les supports du cours.
+Ces fonctions se trouvent dans la bibliothèque `inc/cours.inc`, incluse par `secure_vault.asm` avec `%include "./inc/cours.inc"`. `print_hex` et `print_string` reprennent le code fourni ; les autres sont adaptées ou implémentées à partir des exemples et des signatures prévues dans les supports du cours.
+
+La bibliothèque contient aussi `strlen`, `strcmp` et `read_hex`, qui ne servent pas au Secure Vault mais complètent les signatures prévues dans le squelette de `cours.inc`, pour qu’elle puisse être réutilisée dans d’autres programmes.
 
 Les arguments sont transmis par registres. Pour lire ou écrire un fichier, `rdi` contient le descripteur, `rsi` l’adresse du tampon et `rdx` le nombre d’octets demandé. Le résultat revient dans `rax`.
 
