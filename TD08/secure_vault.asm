@@ -118,15 +118,11 @@ read_db_done:
     cmp qword [db_size], 4096 - credential_size
     ja db_full              ; Refuser aussi un fichier qui remplit le tampon.
 
-    ; Dechiffrer chaque bloc de 8 octets avec la meme cle.
-    mov rax, [db_key]
-    xor rbx, rbx
-decrypt_db_loop:
-    cmp rbx, [db_size]
-    jae append_credential
-    xor qword [db_buffer + rbx], rax
-    add rbx, 8
-    jmp decrypt_db_loop
+    ; Dechiffrer la base chargee.
+    mov rdi, db_buffer      ; Adresse du tampon.
+    mov rsi, [db_size]      ; Taille : valeur de db_size.
+    mov rdx, [db_key]       ; Cle : valeur de db_key.
+    call xor_ecb
 
 append_credential:
     ; Copier les 64 octets de credential1 a la fin de la base en clair.
@@ -143,15 +139,11 @@ copy_credential_loop:
 
 credential_copied:
     add qword [db_size], credential_size
-    ; Recharger la cle : la copie a modifie al, qui fait partie de rax.
-    mov rax, [db_key]
-    xor rbx, rbx
-encrypt_db_loop:
-    cmp rbx, [db_size]
-    jae save_db
-    xor qword [db_buffer + rbx], rax
-    add rbx, 8
-    jmp encrypt_db_loop
+    ; Rechiffrer toute la base, nouvelle entree comprise.
+    mov rdi, db_buffer
+    mov rsi, [db_size]
+    mov rdx, [db_key]
+    call xor_ecb
 
 save_db:
     ; Rouvrir pour repartir du debut du fichier, sans effacer son contenu.
@@ -261,14 +253,11 @@ f2_read_done:
     cmp rax, 0
     jne db_invalid
 
-    mov rax, [db_key]
-    xor rbx, rbx
-f2_decrypt_loop:
-    cmp rbx, [db_size]
-    jae f2_display_start
-    xor qword [db_buffer + rbx], rax
-    add rbx, 8
-    jmp f2_decrypt_loop
+    ; Dechiffrer la copie en memoire (le fichier reste chiffre).
+    mov rdi, db_buffer
+    mov rsi, [db_size]
+    mov rdx, [db_key]
+    call xor_ecb
 
 f2_display_start:
     xor rbx, rbx           ; Position de l'entree courante : 0, 64, 128...

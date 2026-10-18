@@ -232,6 +232,29 @@ read_hex:
     ret
 
 ; ---------------------------------------------------------------------
+; Chiffrement
+; ---------------------------------------------------------------------
+
+; xor_ecb(buff, size, key)
+; rdi = adresse du tampon, rsi = taille en octets (multiple de 8),
+; rdx = cle de 8 octets.
+; Chiffre ou dechiffre le tampon sur place : chaque bloc de 8 octets
+; est combine par XOR avec la meme cle (ECB).
+xor_ecb:
+    push rbp
+    mov rbp, rsp
+    xor rcx, rcx                 ; Position dans le tampon.
+.next_block:
+    cmp rcx, rsi
+    jae .end
+    xor qword [rdi + rcx], rdx
+    add rcx, 8                   ; Bloc suivant.
+    jmp .next_block
+.end:
+    leave
+    ret
+
+; ---------------------------------------------------------------------
 ; Fichiers
 ; ---------------------------------------------------------------------
 
