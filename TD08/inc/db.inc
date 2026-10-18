@@ -13,18 +13,18 @@ load_db:
     mov rdi, db_filename
     call open_file
     cmp rax, 0
-    jl .end
+    jl load_db_end
     mov [db_fd], rax
 
     mov rdi, [db_fd]
     mov rsi, db_buffer
-    mov rdx, DB_CAPACITY
+    mov rdx, 4096           ; Capacite du tampon db_buffer.
     call read_all
     cmp rax, 0
-    jl .close_error
+    jl load_db_close_error
     mov [db_size], rax
-    cmp rax, DB_CAPACITY
-    jb .close                ; Tampon pas plein : tout le fichier est lu.
+    cmp rax, 4096
+    jb load_db_close                ; Tampon pas plein : tout le fichier est lu.
 
     ; Tampon plein : verifier qu'il ne reste rien a lire.
     mov rdi, [db_fd]
@@ -32,37 +32,35 @@ load_db:
     mov rdx, 1
     call read_file
     cmp rax, 0
-    jl .close_error
-    je .close
+    jl load_db_close_error
+    je load_db_close
     mov rdi, msg_large
-    mov rsi, msg_large_size
-    call print_string
-    jmp .close_error
+    call print
+    jmp load_db_close_error
 
-.close:
+load_db_close:
     mov rdi, [db_fd]
     call close_file
     cmp rax, 0
-    jl .end
+    jl load_db_end
     mov rax, [db_size]
     and rax, 63              ; Chaque entree occupe exactement 64 octets.
     cmp rax, 0
-    jne .invalid
+    jne load_db_invalid
     mov rax, [db_size]
-    jmp .end
+    jmp load_db_end
 
-.invalid:
+load_db_invalid:
     mov rdi, msg_invalid
-    mov rsi, msg_invalid_size
-    call print_string
+    call print
     mov rax, -1
-    jmp .end
+    jmp load_db_end
 
-.close_error:
+load_db_close_error:
     mov rdi, [db_fd]
     call close_file
     mov rax, -1
-.end:
+load_db_end:
     leave
     ret
 
@@ -78,7 +76,7 @@ save_db:
     mov rdi, db_filename
     call open_file
     cmp rax, 0
-    jl .end
+    jl save_db_end
     mov [db_fd], rax
 
     mov rdi, [db_fd]
@@ -86,16 +84,16 @@ save_db:
     mov rdx, [db_size]
     call write_all
     cmp rax, 0
-    jl .close_error
+    jl save_db_close_error
 
     mov rdi, [db_fd]
     call close_file          ; rax = 0 ou erreur.
-    jmp .end
+    jmp save_db_end
 
-.close_error:
+save_db_close_error:
     mov rdi, [db_fd]
     call close_file
     mov rax, -1
-.end:
+save_db_end:
     leave
     ret

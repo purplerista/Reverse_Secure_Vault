@@ -85,6 +85,20 @@ print_string:
     leave
     ret
 
+; print(char*)
+; rdi = adresse d'une chaine terminee par 0.
+; Affiche la chaine : sa longueur est calculee par strlen.
+print:
+    push rbp
+    mov rbp, rsp
+    push rsi
+    call strlen             ; rax = longueur, rdi inchange.
+    mov rsi, rax
+    call print_string
+    pop rsi
+    leave
+    ret
+
 ; ---------------------------------------------------------------------
 ; Chaines de caracteres
 ; ---------------------------------------------------------------------
@@ -115,20 +129,20 @@ strcmp:
     push rcx
     push rdx
     xor rcx, rcx            ; Position courante.
-.compare:
+strcmp_compare:
     xor rax, rax
     mov al, [rdi + rcx]
     xor rdx, rdx
     mov dl, [rsi + rcx]
     cmp rax, rdx
-    jne .different
+    jne strcmp_different
     cmp rax, 0
-    je .end                 ; Meme fin de chaine : rax vaut deja 0.
+    je strcmp_end                 ; Meme fin de chaine : rax vaut deja 0.
     inc rcx
-    jmp .compare
-.different:
+    jmp strcmp_compare
+strcmp_different:
     sub rax, rdx
-.end:
+strcmp_end:
     pop rdx
     pop rcx
     leave
@@ -152,35 +166,35 @@ read_string:
     mov [rbp - 8], rdi       ; Adresse du tampon.
     mov qword [rbp - 24], 0  ; Nombre de caracteres stockes.
     cmp rsi, 0
-    je .return
+    je read_string_return
     dec rsi                 ; Reserver un octet pour le zero final.
     mov [rbp - 16], rsi     ; Nombre maximal de caracteres utiles.
 
-.read_char:
+read_string_read_char:
     mov rax, 0              ; Syscall read.
     mov rdi, 0              ; Entree standard : clavier.
     lea rsi, [rbp - 32]     ; Case temporaire pour un caractere.
     mov rdx, 1              ; Lire un seul octet.
     syscall
     cmp rax, 0
-    jle .finish             ; Fin de l'entree ou erreur de lecture.
+    jle read_string_finish             ; Fin de l'entree ou erreur de lecture.
     cmp byte [rbp - 32], 10
-    je .finish              ; Entree produit le saut de ligne 10.
+    je read_string_finish              ; Entree produit le saut de ligne 10.
 
     mov rdx, [rbp - 24]
     cmp rdx, [rbp - 16]
-    jae .read_char          ; Tampon plein : consommer jusqu'a Entree.
+    jae read_string_read_char          ; Tampon plein : consommer jusqu'a Entree.
     mov rdi, [rbp - 8]
     mov al, [rbp - 32]
     mov [rdi + rdx], al      ; Stocker le caractere dans le tampon.
     inc qword [rbp - 24]
-    jmp .read_char
+    jmp read_string_read_char
 
-.finish:
+read_string_finish:
     mov rdi, [rbp - 8]
     mov rdx, [rbp - 24]
     mov byte [rdi + rdx], 0  ; Marquer la fin de la chaine.
-.return:
+read_string_return:
     mov rax, [rbp - 24]
     pop rdx
     pop rsi
@@ -205,28 +219,28 @@ read_hex:
 
     xor rax, rax            ; Valeur en cours de construction.
     lea rdi, [rbp - 32]
-.next_digit:
+read_hex_next_digit:
     xor rdx, rdx
     mov dl, [rdi]
     cmp dl, '0'
-    jb .end                 ; Le zero final arrete aussi la boucle.
+    jb read_hex_end                 ; Le zero final arrete aussi la boucle.
     cmp dl, '9'
-    jbe .decimal
+    jbe read_hex_decimal
     or dl, 0x20             ; Majuscule -> minuscule.
     cmp dl, 'a'
-    jb .end
+    jb read_hex_end
     cmp dl, 'f'
-    ja .end
+    ja read_hex_end
     sub dl, 'a' - 10        ; 'a' -> 10 ... 'f' -> 15.
-    jmp .add_digit
-.decimal:
+    jmp read_hex_add_digit
+read_hex_decimal:
     sub dl, '0'             ; '0' -> 0 ... '9' -> 9.
-.add_digit:
+read_hex_add_digit:
     shl rax, 4              ; Decaler d'un chiffre hexadecimal.
     add rax, rdx
     inc rdi
-    jmp .next_digit
-.end:
+    jmp read_hex_next_digit
+read_hex_end:
     pop rdx
     pop rsi
     pop rdi
@@ -246,13 +260,13 @@ xor_ecb:
     push rbp
     mov rbp, rsp
     xor rcx, rcx                 ; Position dans le tampon.
-.next_block:
+xor_ecb_next_block:
     cmp rcx, rsi
-    jae .end
+    jae xor_ecb_end
     xor qword [rdi + rcx], rdx
     add rcx, 8                   ; Bloc suivant.
-    jmp .next_block
-.end:
+    jmp xor_ecb_next_block
+xor_ecb_end:
     leave
     ret
 
@@ -270,8 +284,8 @@ open_file:
     push rsi
     push rdx
     mov rax, 2              ; Syscall open.
-    mov rsi, 66             ; O_RDWR (2) + O_CREAT (64).
-    mov rdx, 0o600          ; Si creation : lecture/ecriture pour le proprietaire.
+    mov rsi, 66             ; Drapeaux : O_RDWR (2) + O_CREAT (64) = 66.
+    mov rdx, 0x180          ; Droits si creation : rw------- (600 en octal = 0x180).
     syscall
     pop rdx
     pop rsi
@@ -315,22 +329,22 @@ read_all:
     mov r13, rsi            ; Adresse du tampon.
     mov r14, rdx            ; Capacite du tampon.
     xor rbx, rbx            ; Total des octets lus.
-.next_read:
+read_all_next_read:
     cmp rbx, r14
-    jae .done               ; Tampon plein.
+    jae read_all_done               ; Tampon plein.
     mov rdi, r12
     lea rsi, [r13 + rbx]    ; Lire apres les octets deja charges.
     mov rdx, r14
     sub rdx, rbx            ; Place encore disponible.
     call read_file
     cmp rax, 0
-    jl .end                 ; Erreur : rax negatif renvoye tel quel.
-    je .done                ; Zero octet lu : fin du fichier.
+    jl read_all_end                 ; Erreur : rax negatif renvoye tel quel.
+    je read_all_done                ; Zero octet lu : fin du fichier.
     add rbx, rax
-    jmp .next_read
-.done:
+    jmp read_all_next_read
+read_all_done:
     mov rax, rbx
-.end:
+read_all_end:
     pop r14
     pop r13
     pop r12
@@ -353,25 +367,25 @@ write_all:
     mov r13, rsi            ; Adresse des donnees.
     mov r14, rdx            ; Nombre d'octets a ecrire.
     xor rbx, rbx            ; Total des octets ecrits.
-.next_write:
+write_all_next_write:
     cmp rbx, r14
-    jae .done               ; Tout est ecrit.
+    jae write_all_done               ; Tout est ecrit.
     mov rdi, r12
     lea rsi, [r13 + rbx]    ; Reprendre apres les octets deja ecrits.
     mov rdx, r14
     sub rdx, rbx            ; Octets restants.
     call write_file
     cmp rax, 0
-    jl .end                 ; Erreur : rax negatif renvoye tel quel.
-    je .stuck               ; Rien ecrit : eviter une boucle infinie.
+    jl write_all_end                 ; Erreur : rax negatif renvoye tel quel.
+    je write_all_stuck               ; Rien ecrit : eviter une boucle infinie.
     add rbx, rax
-    jmp .next_write
-.stuck:
+    jmp write_all_next_write
+write_all_stuck:
     mov rax, -1
-    jmp .end
-.done:
+    jmp write_all_end
+write_all_done:
     mov rax, rbx
-.end:
+write_all_end:
     pop r14
     pop r13
     pop r12

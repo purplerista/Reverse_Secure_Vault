@@ -10,31 +10,28 @@ f1_add_credential:
     mov rbp, rsp
 
     mov rdi, msg_login
-    mov rsi, msg_login_size
-    call print_string
+    call print
     mov rdi, credential1 + credential.login
     mov rsi, 32              ; Capacite du champ, zero final compris.
     call read_string
 
     mov rdi, msg_password
-    mov rsi, msg_password_size
-    call print_string
+    call print
     mov rdi, credential1 + credential.password
     mov rsi, 32
     call read_string
 
     call load_db             ; rax = taille de la base chiffree.
     cmp rax, 0
-    jl .end
-    cmp rax, DB_CAPACITY - credential_size
-    jbe .has_room
+    jl f1_add_credential_end
+    cmp rax, 4096 - credential_size
+    jbe f1_add_credential_has_room
     mov rdi, msg_full
-    mov rsi, msg_full_size
-    call print_string
+    call print
     mov rax, -1
-    jmp .end
+    jmp f1_add_credential_end
 
-.has_room:
+f1_add_credential_has_room:
     ; Dechiffrer la base chargee.
     mov rdi, db_buffer
     mov rsi, [db_size]
@@ -45,14 +42,14 @@ f1_add_credential:
     mov rdi, db_buffer
     add rdi, [db_size]
     xor rcx, rcx             ; rcx est caller-saved : pas de sauvegarde.
-.copy:
+f1_add_credential_copy:
     cmp rcx, credential_size
-    jae .copied
+    jae f1_add_credential_copied
     mov al, [credential1 + rcx]
     mov [rdi + rcx], al
     inc rcx
-    jmp .copy
-.copied:
+    jmp f1_add_credential_copy
+f1_add_credential_copied:
     add qword [db_size], credential_size
 
     ; Rechiffrer toute la base, nouvelle entree comprise.
@@ -63,11 +60,10 @@ f1_add_credential:
 
     call save_db
     cmp rax, 0
-    jl .end
+    jl f1_add_credential_end
     mov rdi, msg_saved
-    mov rsi, msg_saved_size
-    call print_string
+    call print
     xor rax, rax
-.end:
+f1_add_credential_end:
     leave
     ret

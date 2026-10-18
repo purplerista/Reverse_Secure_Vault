@@ -10,8 +10,7 @@ f0_open_vault:
     mov rbp, rsp
 
     mov rdi, message_db
-    mov rsi, message_db_size
-    call print_string
+    call print
 
     mov rdi, db_password
     mov rsi, 32              ; Capacite : 31 caracteres et un zero final.
@@ -23,9 +22,9 @@ f0_open_vault:
     mov rdi, db_filename     ; Ouvrir ou creer la base...
     call open_file
     cmp rax, 0
-    jl .end
+    jl f0_open_vault_end
     mov rdi, rax
     call close_file          ; ...puis la fermer : rax = 0 ou erreur.
-.end:
+f0_open_vault_end:
     leave
     ret

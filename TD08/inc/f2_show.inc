@@ -12,21 +12,25 @@ f2_show_vault:
 
     call load_db
     cmp rax, 0
-    jl .end
+    jl f2_show_vault_end
+    jne f2_show_vault_decrypt
+    mov rdi, msg_empty       ; Aucune entree dans la base.
+    call print
+    jmp f2_show_vault_done
 
+f2_show_vault_decrypt:
     mov rdi, db_buffer
     mov rsi, [db_size]
     mov rdx, [db_key]
     call xor_ecb
 
     xor rbx, rbx             ; Position de l'entree courante : 0, 64, 128...
-.next_entry:
+f2_show_vault_next_entry:
     cmp rbx, [db_size]
-    jae .done
+    jae f2_show_vault_done
 
     mov rdi, msg_login
-    mov rsi, msg_login_size
-    call print_string
+    call print
     mov rdi, db_buffer + credential.login
     add rdi, rbx
     call strlen              ; read_string a garanti le zero final.
@@ -37,8 +41,7 @@ f2_show_vault:
     call print_string
 
     mov rdi, msg_password
-    mov rsi, msg_password_size
-    call print_string
+    call print
     mov rdi, db_buffer + credential.password
     add rdi, rbx
     call strlen
@@ -49,10 +52,10 @@ f2_show_vault:
     call print_string
 
     add rbx, credential_size ; Entree suivante.
-    jmp .next_entry
-.done:
+    jmp f2_show_vault_next_entry
+f2_show_vault_done:
     xor rax, rax
-.end:
+f2_show_vault_end:
     pop rbx
     leave
     ret

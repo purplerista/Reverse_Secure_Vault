@@ -87,11 +87,11 @@ Les paramètres d’ouverture sont :
 ```nasm
 mov rax, 2
 mov rsi, 66
-mov rdx, 0o600
+mov rdx, 0x180
 syscall
 ```
 
-`2` dans `rax` sélectionne le syscall `open`. `66` combine l’ouverture en lecture/écriture et la création si nécessaire. `0o600` demande les permissions de lecture et d’écriture pour le propriétaire lors de la création.
+`2` dans `rax` sélectionne le syscall `open`. `66` est la somme de deux drapeaux : `O_RDWR` (2, lecture/écriture) et `O_CREAT` (64, création si nécessaire). `0x180` correspond aux droits `rw-------` (600 en octal) : lecture et écriture pour le propriétaire lors de la création.
 
 Le fichier est fermé après cette initialisation. F0 ne chiffre encore aucune donnée : elle prépare la clé et le fichier.
 
@@ -117,17 +117,17 @@ La réponse est lue avec `read_string`, puis comparée aux caractères `1` et `2
 
 ```nasm
     cmp byte [menu_choice], '1'
-    je .choice_f1
+    je start_choice_f1
     cmp byte [menu_choice], '2'
-    je .choice_f2
+    je start_choice_f2
     jmp exit_program
 
-.choice_f1:
+start_choice_f1:
     call f1_add_credential
-    jmp .check_result
-.choice_f2:
+    jmp start_check_result
+start_choice_f2:
     call f2_show_vault
-.check_result:
+start_check_result:
     cmp rax, 0
     jl file_error
 ```
@@ -232,12 +232,12 @@ Le chiffrement est réalisé par la fonction `xor_ecb(buff, size, key)` de la bi
 Dans la fonction :
 
 ```nasm
-.next_block:
+xor_ecb_next_block:
     cmp rcx, rsi
-    jae .end
+    jae xor_ecb_end
     xor qword [rdi + rcx], rdx
     add rcx, 8
-    jmp .next_block
+    jmp xor_ecb_next_block
 ```
 
 - `rdx` contient la clé.
@@ -364,7 +364,7 @@ F2 est réalisée par la fonction `f2_show_vault` (`inc/f2_show.inc`) :
 
    Les étapes 1 à 4 sont celles de `load_db`, partagée avec F1.
 5. Déchiffrer le tampon avec la clé préparée dans F0.
-6. Afficher le login et le password de chaque entrée.
+6. Afficher le login et le password de chaque entrée, ou `Base vide.` si la base ne contient aucune entrée.
 7. Quitter après la dernière entrée.
 
 L’affichage parcourt les structures par pas de 64 octets :
@@ -419,6 +419,7 @@ Les fichiers `.inc` sont recopiés par NASM dans `secure_vault.asm` grâce à `%
 |---|---|---|
 | `print_hex` | `rdi` = valeur | – |
 | `print_string` | `rdi` = texte, `rsi` = taille | – |
+| `print` | `rdi` = chaîne terminée par 0 | longueur |
 | `strlen` | `rdi` = chaîne terminée par 0 | longueur |
 | `strcmp` | `rdi`, `rsi` = chaînes | 0 si égales |
 | `read_string` | `rdi` = tampon, `rsi` = capacité | caractères stockés |
@@ -453,6 +454,14 @@ Les fichiers `.inc` sont recopiés par NASM dans `secure_vault.asm` grâce à `%
 - Une valeur qui n’a pas besoin de survivre à un appel est placée dans un registre *caller-saved*, qui n’a pas à être sauvegardé : c’est le cas du compteur `rcx` de `xor_ecb` (qui n’appelle aucune fonction) et de la boucle de copie de `f1_add_credential` (aucun appel dans la boucle).
 - `read_string` et `read_hex` réservent des variables locales sur la pile avec `enter 32, 0`.
 
+### Notions utilisées
+
+Le code se limite aux notions des supports du cours :
+
+- Les messages sont des chaînes terminées par 0, affichées par `print`, qui calcule leur longueur avec `strlen` puis appelle `print_string` (même principe que la fonction `print` de la bibliothèque du TD06).
+- Les étiquettes suivent le style du cours (`loop_strlen`, `strlen_end`) : chaque étiquette interne est préfixée par le nom de sa fonction, par exemple `xor_ecb_next_block` ou `read_all_done`.
+- Les constantes sont écrites en décimal ou en hexadécimal, avec un commentaire (`4096`, `66`, `0x180`).
+
 ## 10. Taille du fichier et limites de notre réalisation
 
 Les entrées sont placées les unes à la suite des autres, sans en-tête ni séparateur. Le chiffrement ne change pas leur taille.
@@ -464,7 +473,7 @@ Les entrées sont placées les unes à la suite des autres, sans en-tête ni sé
 | 2 | 128 octets |
 | 64 | 4096 octets |
 
-Notre tampon fixe contient 4096 octets (`DB_CAPACITY`), soit 64 entrées maximum. F1 refuse un ajout si la place manque. `load_db` refuse un fichier dépassant cette capacité, en vérifiant s’il reste un octet à lire après le remplissage du tampon.
+Notre tampon fixe `db_buffer` contient 4096 octets, soit 64 entrées maximum. F1 refuse un ajout si la place manque. `load_db` refuse un fichier dépassant cette capacité, en vérifiant s’il reste un octet à lire après le remplissage du tampon.
 
 La taille du tampon et la réservation d’un zéro final dans chaque champ sont des choix de réalisation ; l’énoncé impose les champs de 32 octets, mais ne fixe pas ces détails.
 
@@ -590,7 +599,7 @@ Les essais suivants ont été effectués dans le conteneur Docker du projet, sou
 | Ajout d’identifiants (F1) | Affichage du message de confirmation. |
 | Taille après deux entrées | Fichier de 128 octets. |
 | Affichage par F2 | Les deux couples saisis sont affichés en clair, par exemple `alice` / `exemple123` et `bob` / `secret456`. |
-| F2 sur une base vide | Aucun affichage, fin normale. |
+| F2 sur une base vide | Message `Base vide.`, fin normale. |
 | Login de plus de 31 caractères | Le login est tronqué à 31 caractères, le password reste correct. |
 | Base pleine (64 entrées) puis F1 | Ajout refusé avec un message, fichier inchangé, code de sortie 1. |
 | Fichier de plus de 4096 octets | Refusé avec un message, code de sortie 1. |
