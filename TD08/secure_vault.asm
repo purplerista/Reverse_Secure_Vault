@@ -62,10 +62,10 @@ file_error:
 ; =====================================================================
 ; Fonctions du Secure Vault (un fichier par fonctionnalite)
 ; =====================================================================
-%include "./vault/db.inc"
-%include "./vault/f0_open.inc"
-%include "./vault/f1_add.inc"
-%include "./vault/f2_show.inc"
+%include "./inc/db.inc"
+%include "./inc/f0_open.inc"
+%include "./inc/f1_add.inc"
+%include "./inc/f2_show.inc"
 
 
 section .data

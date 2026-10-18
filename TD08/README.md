@@ -370,12 +370,11 @@ F2 ne réécrit pas le fichier. Seule la copie en mémoire est déchiffrée ; le
 TD08/
 ├── secure_vault.asm     programme principal : _start, menu, données
 ├── inc/
-│   └── cours.inc        bibliothèque générique, réutilisable
-├── vault/               fonctions propres au Secure Vault
-│   ├── db.inc           load_db, save_db
-│   ├── f0_open.inc      f0_open_vault
-│   ├── f1_add.inc       f1_add_credential
-│   └── f2_show.inc      f2_show_vault
+│   ├── cours.inc        bibliothèque générique, réutilisable
+│   ├── db.inc           Secure Vault : load_db, save_db
+│   ├── f0_open.inc      Secure Vault : f0_open_vault
+│   ├── f1_add.inc       Secure Vault : f1_add_credential
+│   └── f2_show.inc      Secure Vault : f2_show_vault
 ├── build_nasm.sh        compilation vers rootfs/
 ├── qiling_run.py        exécution sous Qiling
 ├── ql_run.sh            exécution sous Qiling (qltool)
@@ -404,7 +403,7 @@ Les fichiers `.inc` sont recopiés par NASM dans `secure_vault.asm` grâce à `%
 
 `print_hex` et `print_string` reprennent le code fourni ; les autres complètent les signatures prévues dans le squelette de `cours.inc`. `strcmp` et `read_hex` ne servent pas au Secure Vault mais rendent la bibliothèque utilisable par d’autres programmes.
 
-### Fonctions du Secure Vault : `vault/`
+### Fonctions du Secure Vault : `inc/db.inc`, `inc/f0_open.inc`, `inc/f1_add.inc`, `inc/f2_show.inc`
 
 | Fonction | Rôle | Retour (`rax`) |
 |---|---|---|
