@@ -336,6 +336,47 @@ read_all:
     leave
     ret
 
+; write_all(int fd, char* buff, int size)
+; rdi = descripteur, rsi = adresse des donnees, rdx = nombre d'octets.
+; Appelle write_file jusqu'a ce que les size octets soient ecrits.
+; Retour : rax = size si tout est ecrit, valeur negative si erreur.
+write_all:
+    push rbp
+    mov rbp, rsp
+    push rbx                ; Registres callee-saved utilises :
+    push r12                ; sauvegarde obligatoire.
+    push r13
+    push r14
+    mov r12, rdi            ; fd
+    mov r13, rsi            ; Adresse des donnees.
+    mov r14, rdx            ; Nombre d'octets a ecrire.
+    xor rbx, rbx            ; Total des octets ecrits.
+.next_write:
+    cmp rbx, r14
+    jae .done               ; Tout est ecrit.
+    mov rdi, r12
+    lea rsi, [r13 + rbx]    ; Reprendre apres les octets deja ecrits.
+    mov rdx, r14
+    sub rdx, rbx            ; Octets restants.
+    call write_file
+    cmp rax, 0
+    jl .end                 ; Erreur : rax negatif renvoye tel quel.
+    je .stuck               ; Rien ecrit : eviter une boucle infinie.
+    add rbx, rax
+    jmp .next_write
+.stuck:
+    mov rax, -1
+    jmp .end
+.done:
+    mov rax, rbx
+.end:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    leave
+    ret
+
 ; close_file(int fd)
 ; rdi = descripteur du fichier a fermer.
 ; Retour : rax = 0 si fermeture reussie, valeur negative si erreur.

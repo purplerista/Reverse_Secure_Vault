@@ -143,23 +143,14 @@ save_db:
     cmp rax, 0
     jl file_error
     mov [db_fd], rax
-    mov qword [db_written], 0
 
-write_db_loop:
-    mov rdx, [db_size]
-    sub rdx, [db_written]
-    cmp rdx, 0
-    je write_db_done
-    mov rdi, [db_fd]
-    mov rsi, db_buffer
-    add rsi, [db_written]
-    call write_file
+    mov rdi, [db_fd]        ; Fichier a ecrire.
+    mov rsi, db_buffer      ; Donnees chiffrees.
+    mov rdx, [db_size]      ; Nombre d'octets a ecrire.
+    call write_all
     cmp rax, 0
-    jle write_db_error
-    add [db_written], rax   ; Continuer si Linux n'a ecrit qu'une partie.
-    jmp write_db_loop
+    jl write_db_error
 
-write_db_done:
     mov rdi, [db_fd]
     call close_file
     cmp rax, 0
@@ -356,9 +347,6 @@ section .bss
     db_size: resq 1         ; Nombre d'octets effectivement charges.
     db_fd: resq 1           ; Descripteur du fichier ouvert.
     ; ===== FIN AJOUT ETAPE 7 : tampon de la base =====
-    ; ===== DEBUT AJOUT ETAPE 8 : suivi de la sauvegarde =====
-    db_written: resq 1      ; Nombre d'octets deja ecrits dans le fichier.
-    ; ===== FIN AJOUT ETAPE 8 : sauvegarde =====
     ; ===== DEBUT AJOUT ETAPE 9 : verification de la fin du fichier =====
     db_probe: resb 1
     ; ===== FIN AJOUT ETAPE 9 : verification =====
