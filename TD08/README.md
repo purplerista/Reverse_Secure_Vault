@@ -450,7 +450,7 @@ Les fichiers `.inc` sont recopiés par NASM dans `secure_vault.asm` grâce à `%
 - Arguments dans `rdi`, `rsi`, `rdx` ; résultat dans `rax` (convention System V x86-64).
 - Chaque fonction commence par un prologue (`push rbp` / `mov rbp, rsp`, ou `enter`) et se termine par `leave` / `ret`.
 - Les registres *callee-saved* utilisés (`rbx`, `r12` à `r14`) sont sauvegardés par `push` au début et restaurés par `pop`, dans l’ordre inverse, avant `leave` : c’est le cas de `read_all`, `write_all` et `f2_show_vault`, qui ont besoin de valeurs conservées à travers des appels.
-- Les fonctions qui n’appellent personne (`xor_ecb`, la copie de F1) utilisent des registres *caller-saved* (`rcx`) et n’ont rien à sauvegarder.
+- Une valeur qui n’a pas besoin de survivre à un appel est placée dans un registre *caller-saved*, qui n’a pas à être sauvegardé : c’est le cas du compteur `rcx` de `xor_ecb` (qui n’appelle aucune fonction) et de la boucle de copie de `f1_add_credential` (aucun appel dans la boucle).
 - `read_string` et `read_hex` réservent des variables locales sur la pile avec `enter 32, 0`.
 
 ## 10. Taille du fichier et limites de notre réalisation

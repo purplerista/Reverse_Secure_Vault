@@ -4,9 +4,11 @@
 ; Convention d'appel (System V) :
 ;   arguments : rdi, rsi, rdx      retour : rax
 ; Chaque fonction a un prologue (push rbp / mov rbp, rsp ou enter)
-; et un epilogue (leave / ret). Les registres utilises en dehors de
-; rax sont sauvegardes, sauf rcx et r11 que l'instruction syscall
-; modifie toujours.
+; et un epilogue (leave / ret).
+; Registres preserves (callee-saved) : rbx, rbp, r12 a r15 ; une fonction
+; qui les utilise les sauvegarde sur la pile (read_all, write_all).
+; Registres modifiables (caller-saved) : rax, rcx, rdx, rsi, rdi, r8 a r11.
+; L'instruction syscall modifie toujours rax, rcx et r11.
 ;
 ; A inclure dans la section .text :  %include "./inc/cours.inc"
 ; =====================================================================
