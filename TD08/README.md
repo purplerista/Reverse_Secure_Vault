@@ -398,6 +398,8 @@ La taille du tampon et la réservation d’un zéro final dans chaque champ sont
 
 Le programme n’a pas de mécanisme de vérification du mot de passe de la base. Une mauvaise clé peut produire un affichage incorrect et ne doit pas être utilisée pour ajouter une entrée à une base existante. Le contrôle de taille ne permet pas de détecter une mauvaise clé.
 
+**Faille connue — longueur des champs dans F2.** F2 calcule la longueur du login et du password avec `strlen`, qui s’arrête au premier octet nul. Avec une saisie normale, ce zéro est toujours présent : `read_string` le réserve, un champ contient donc au plus 31 caractères suivis de 0. En revanche, après un déchiffrement avec une mauvaise clé (ou un fichier modifié à la main), un champ peut ne plus contenir de zéro : `strlen` continue alors dans le champ suivant, et l’affichage mélange les champs (le login peut s’afficher collé au password). Une version bornée (`strnlen`, arrêt à 32 octets) corrigerait ce cas ; nous avons choisi de ne pas l’ajouter pour garder le code simple, l’énoncé ne demandant pas de gérer une mauvaise clé.
+
 Les saisies restent visibles dans le terminal. Il n’y a pas de suppression d’entrée, de recherche, de modification d’identifiant ni de détection des doublons : ces fonctionnalités ne sont pas demandées dans l’énoncé.
 
 ## 11. Compilation et exemple complet

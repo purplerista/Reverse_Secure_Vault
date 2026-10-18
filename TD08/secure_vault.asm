@@ -246,15 +246,8 @@ f2_display_loop:
     call print_string
     mov rdi, db_buffer + credential.login
     add rdi, rbx
-    xor rsi, rsi
-f2_login_length:
-    cmp rsi, 32             ; Ne jamais lire au-dela du champ login.
-    jae f2_print_login
-    cmp byte [rdi + rsi], 0
-    je f2_print_login
-    inc rsi
-    jmp f2_login_length
-f2_print_login:
+    call strlen             ; read_string a garanti le zero final.
+    mov rsi, rax            ; rdi n'a pas ete modifie par strlen.
     call print_string
     mov rdi, nl
     mov rsi, 1
@@ -265,15 +258,8 @@ f2_print_login:
     call print_string
     mov rdi, db_buffer + credential.password
     add rdi, rbx
-    xor rsi, rsi
-f2_password_length:
-    cmp rsi, 32             ; Ne jamais lire au-dela du champ password.
-    jae f2_print_password
-    cmp byte [rdi + rsi], 0
-    je f2_print_password
-    inc rsi
-    jmp f2_password_length
-f2_print_password:
+    call strlen             ; read_string a garanti le zero final.
+    mov rsi, rax            ; rdi n'a pas ete modifie par strlen.
     call print_string
     mov rdi, nl
     mov rsi, 1
