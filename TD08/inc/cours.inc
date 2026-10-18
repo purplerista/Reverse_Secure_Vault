@@ -298,6 +298,44 @@ read_file:
     leave
     ret
 
+; read_all(int fd, char* buff, int max)
+; rdi = descripteur, rsi = adresse du tampon, rdx = capacite du tampon.
+; Appelle read_file jusqu'a la fin du fichier ou jusqu'a remplir le tampon.
+; Retour : rax = nombre total d'octets lus, valeur negative si erreur.
+read_all:
+    push rbp
+    mov rbp, rsp
+    push rbx                ; rbx, r12, r13, r14 sont callee-saved :
+    push r12                ; on les sauvegarde avant de s'en servir.
+    push r13
+    push r14
+    mov r12, rdi            ; fd
+    mov r13, rsi            ; Adresse du tampon.
+    mov r14, rdx            ; Capacite du tampon.
+    xor rbx, rbx            ; Total des octets lus.
+.next_read:
+    cmp rbx, r14
+    jae .done               ; Tampon plein.
+    mov rdi, r12
+    lea rsi, [r13 + rbx]    ; Lire apres les octets deja charges.
+    mov rdx, r14
+    sub rdx, rbx            ; Place encore disponible.
+    call read_file
+    cmp rax, 0
+    jl .end                 ; Erreur : rax negatif renvoye tel quel.
+    je .done                ; Zero octet lu : fin du fichier.
+    add rbx, rax
+    jmp .next_read
+.done:
+    mov rax, rbx
+.end:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    leave
+    ret
+
 ; close_file(int fd)
 ; rdi = descripteur du fichier a fermer.
 ; Retour : rax = 0 si fermeture reussie, valeur negative si erreur.

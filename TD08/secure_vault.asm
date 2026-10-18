@@ -84,24 +84,15 @@ F1:
     cmp rax, 0
     jl file_error
     mov [db_fd], rax        ; Conserver le descripteur pendant la lecture.
-    mov qword [db_size], 0  ; Aucun octet charge pour l'instant.
 
-read_db_loop:
-    mov rdx, 4096
-    sub rdx, [db_size]      ; Place encore disponible dans le tampon.
-    cmp rdx, 0
-    je read_db_done
-    mov rdi, [db_fd]
-    mov rsi, db_buffer
-    add rsi, [db_size]      ; Lire apres les octets deja charges.
-    call read_file
+    mov rdi, [db_fd]        ; Fichier a lire.
+    mov rsi, db_buffer      ; Adresse du tampon.
+    mov rdx, 4096           ; Capacite du tampon.
+    call read_all
     cmp rax, 0
     jl read_db_error
-    je read_db_done         ; Zero octet lu : fin du fichier.
-    add [db_size], rax      ; Cumuler le nombre d'octets charges.
-    jmp read_db_loop
+    mov [db_size], rax      ; Nombre d'octets charges.
 
-read_db_done:
     mov rdi, [db_fd]
     call close_file
     cmp rax, 0
@@ -210,22 +201,16 @@ F2:
     cmp rax, 0
     jl file_error
     mov [db_fd], rax
-    mov qword [db_size], 0
 
-f2_read_loop:
-    mov rdx, 4096
-    sub rdx, [db_size]
-    cmp rdx, 0
-    je f2_check_end
     mov rdi, [db_fd]
     mov rsi, db_buffer
-    add rsi, [db_size]
-    call read_file
+    mov rdx, 4096
+    call read_all
     cmp rax, 0
     jl read_db_error
-    je f2_read_done
-    add [db_size], rax
-    jmp f2_read_loop
+    mov [db_size], rax
+    cmp rax, 4096
+    jb f2_read_done         ; Tampon pas plein : tout le fichier est lu.
 
 f2_check_end:
     ; Tampon plein : verifier qu'aucun octet du fichier ne reste a lire.
